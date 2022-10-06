@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "crc": "^3.5.0",
-    "serialport": "4.0.7"
+    "line-reader": "^0.4.0"
   },
   "devDependencies": {
     "jasmine": "^2.5.3"

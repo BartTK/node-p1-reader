@@ -1,6 +1,6 @@
 var EventEmitter = require('events');
 var util = require('util');
-var serialPort = require('serialport');
+const lineReader = require('line-reader');
 
 var serialPortUsed = false;
 var availablePorts = [];
@@ -73,101 +73,60 @@ function _setupSerialConnection() {
 
     debug.log('Trying to connect to Smart Meter via port: ' + port);
 
-    // Go to the next port if this one didn't respond within the timeout limit
-    timer = setTimeout(function() {
-        if (!serialPortUsed) {
-            _tryNextSerialPort();
-        }
-    }, config.connectionSetupTimeout);
-
-    // Open serial port connection
-    var sp = new serialPort(port, config.serialPort);
-
     var received = '';
 
-    sp.on('open', function () {
-        debug.log('Serial connection established');
+    lineReader.eachLine(port, function(line, last) {
+        received += line + '\r\n';
 
-        sp.on('data', function (data) {
-            received += data.toString();
+        var startCharPos = received.indexOf(config.startCharacter);
+        var endCharPos = received.indexOf(config.stopCharacter);
 
-            var startCharPos = received.indexOf(config.startCharacter);
-            var endCharPos = received.indexOf(config.stopCharacter);
+        if (endCharPos >= 0 && endCharPos < startCharPos) {
+            received = received.substr(endCharPos + 1);
+            startCharPos = -1;
+            endCharPos = -1;
+        }
 
-            if (endCharPos >= 0 && endCharPos < startCharPos) {
-                received = received.substr(endCharPos + 1);
-                startCharPos = -1;
-                endCharPos = -1;
+        // Package is complete if the start- and stop character are received
+        const crcReceived = endCharPos >= 0 && received.length > endCharPos + 4;
+        if (startCharPos >= 0 && endCharPos >= 0 && crcReceived) {           
+            var packet = received.substr(startCharPos, endCharPos - startCharPos);
+            const expectedCrc = parseInt(received.substr(endCharPos + 1, 4), 16);
+            received = received.substr(endCharPos + 5);
+
+            var crcOk = true;
+            if (crcCheckRequired) {
+                crcOk = checkCrc(packet + '!', expectedCrc);
             }
 
-            // Package is complete if the start- and stop character are received
-            const crcReceived = endCharPos >= 0 && received.length > endCharPos + 4;
-            if (startCharPos >= 0 && endCharPos >= 0 && crcReceived) {
-                var packet = received.substr(startCharPos, endCharPos - startCharPos);
-                const expectedCrc = parseInt(received.substr(endCharPos + 1, 4), 16);
-                received = received.substr(endCharPos + 5);
+            if (crcOk) {
+                var parsedPacket = parsePacket(packet);
 
-                var crcOk = true;
-                if (crcCheckRequired) {
-                    crcOk = checkCrc(packet + '!', expectedCrc);
-                }
-
-                if (crcOk) {
-                    var parsedPacket = parsePacket(packet);
-
-                    // Verify if connected to the correct serial port at initialization
-                    if (!serialPortUsed) {
-                        if (parsedPacket.timestamp !== null) {
-                            debug.log('Connection with Smart Meter established');
-                            serialPortUsed = port;
-
-                            constructor.emit('connected', port);
-                        } else {
-                            _tryNextSerialPort();
-                        }
-                    }
-
-                    debug.writeToLogFile(packet, parsedPacket);
-
-                    constructor.emit('reading-raw', packet);
-
+                // Verify if connected to the correct serial port at initialization
+                if (!serialPortUsed) {
                     if (parsedPacket.timestamp !== null) {
-                        constructor.emit('reading', parsedPacket);
+                        debug.log('Connection with Smart Meter established');
+                        serialPortUsed = port;
+
+                        constructor.emit('connected', port);
                     } else {
-                        constructor.emit('error', 'Invalid reading');
+                        _tryNextSerialPort();
                     }
-                } else {
-                    constructor.emit('error', 'Invalid CRC');
                 }
+
+                debug.writeToLogFile(packet, parsedPacket);
+
+                constructor.emit('reading-raw', packet);
+
+                if (parsedPacket.timestamp !== null) {
+                    constructor.emit('reading', parsedPacket);
+                } else {
+                    constructor.emit('error', 'Invalid reading');
+                }
+            } else {
+                constructor.emit('error', 'Invalid CRC');
             }
-        });
-    });
-
-    sp.on('error', function (error) {
-        constructor.emit('error', error);
-
-        // Reject this port if we haven't found the correct port yet
-        if (!serialPortUsed) {
-            _tryNextSerialPort();
         }
     });
-
-    sp.on('close', function () {
-        constructor.emit('close');
-    });
 }
 
-/**
- * Try the next serial port if available
- */
-function _tryNextSerialPort() {
-    clearTimeout(timer);
-    availablePorts.shift();
-
-    if (availablePorts.length > 0) {
-        debug.log('Smart Meter not attached to this port, trying another...');
-        _setupSerialConnection();
-    } else {
-        throw new Error('Could not find an attached Smart Meter');
-    }
-}
