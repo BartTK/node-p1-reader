@@ -1,37 +1,42 @@
-var P1Reader = require('../main');
-var fs = require('fs');
+const P1Reader = require('../main');
+const fs = require('fs');
 
-var config = {};
+// Set the serialport configuration for your specific type of Smart Meter, look at the README for more details
+let config = {
+    port: '/dev/ttyUSB0',
+    baudRate: 115200,
+    parity: "none",
+    dataBits: 8,
+    stopBits: 1
+};
 
 // Enable Debug Mode by uncommenting the line below
-// config.debug = true;
-
-// Force a specific serial port (instead of auto discovery) by uncommenting the line below
-// config.serialPort = '/dev/tty-usbserial1';
+config.debug = true;
 
 // Enable Emulator Mode by uncommenting the line below
 // config.emulator = true;
 
 // Optionally override certain emulator parameters if Emulator Mode is enabled by uncommenting the lines below
-// config.emulatorOverrides = {};
-// config.emulatorOverrides.electricityOffset = 100;
-// config.emulatorOverrides.electricityIncrement = 0.500;
-// config.emulatorOverrides.gasOffset = 50;
-// config.emulatorOverrides.gasIncrement = 0.100;
-// config.emulatorOverrides.interval = 1;
-// config.emulatorOverrides.intervalGas = 3; // Must be larger than 'interval'
+// config.emulatorOverrides = {
+//     electricityOffset: 100,
+//     electricityIncrement: 0.500,
+//     gasOffset: 50,
+//     gasIncrement: 0.100,
+//     interval: 1,
+//     intervalGas: 3 // Must be larger than 'interval'
+// };
 
-var p1Reader = new P1Reader(config);
+const p1Reader = new P1Reader(config);
 
-p1Reader.on('connected', function(port) {
-    console.log('Connection with the Smart Meter has been established on port: ' + port);
+p1Reader.on('connected', () => {
+    console.log('[My Example App]: Connection with the Smart Meter has been established via p1-reader!');
 });
 
-p1Reader.on('reading', function(data) {
-    console.log('Reading received: currently consuming ' + data.electricity.received.actual.reading + data.electricity.received.actual.unit);
+p1Reader.on('reading', data => {
+    console.log('[My Example App]: Reading received via p1-reader, we are currently consuming ' + data.electricity.received.actual.reading + data.electricity.received.actual.unit);
 
     // Write electricity totals and actual value to CSV
-    var csvOutput = '' +
+    const csvOutput = '' +
         data.timestamp + ';' +
         data.electricity.received.tariff1.reading + ';' +
         data.electricity.received.tariff2.reading + ';' +
@@ -42,23 +47,23 @@ p1Reader.on('reading', function(data) {
         data.gas.timestamp + ';' +
         data.gas.reading + '\n';
 
-    fs.appendFile('p1-reader-log.csv', csvOutput);
+    fs.appendFile('p1-reader-log.csv', csvOutput, err => {});
 });
 
-p1Reader.on('reading-raw', function(data) {
-    // If you are interested in viewing the unparsed data that was received at the serial port uncomment the line below
+p1Reader.on('reading-raw', data => {
+    // If you are interested in viewing the unparsed raw data that was received at the serial port uncomment the line below
     // console.log(data);
 });
 
-p1Reader.on('error', function(error) {
-    console.log(error);
+p1Reader.on('error', error => {
+    console.log('[My Example App]: p1-reader responded with the error: ' + error);
 });
 
-p1Reader.on('close', function() {
-    console.log('Connection closed');
+p1Reader.on('close', () => {
+    console.log('[My Example App]: Connection closed by p1-reader');
 });
 
 // Handle all uncaught errors without crashing
-process.on('uncaughtException', function(error) {
-    console.error(error);
+process.on('uncaughtException', error => {
+    console.error('[My Example App]: an uncaught error occurred: ' + error);
 });

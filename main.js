@@ -3,9 +3,7 @@ var util = require('util');
 const lineReader = require('line-reader');
 
 var serialPortUsed = false;
-var availablePorts = [];
 var constructor;
-var timer;
 var crcCheckRequired = false;
 
 const checkCrc = require('./lib/checkCrc');
@@ -14,15 +12,14 @@ var debug = require('./lib/debug');
 var config = require('./config/config.json');
 
 function P1Reader(options) {
-    if (typeof options !== 'object') {
-      options = {};
+    if (options.debug) {
+        debug.enableDebugMode();
     }
 
-    debug.setDebugMode(options.debug);
-
+    // Overwrite serialport module when emulator mode is set
     if (options.emulator) {
-        serialPort = require('./lib/emulateSerialport');
-        serialPort.setEmulatorOverrides(options.emulatorOverrides);
+        SerialPort = require('./lib/emulateSerialport');
+        SerialPort.setEmulatorOverrides(options.emulatorOverrides);
     }
 
     if (options.crcCheckRequired) {
@@ -32,45 +29,18 @@ function P1Reader(options) {
     constructor = this;
 
     EventEmitter.call(this);
-
-    // Either force a specific port or automatically discover it
-    if (options && options.serialPort) {
-        availablePorts[0] = options.serialPort;
-        _setupSerialConnection();
-    } else {
-        serialPort.list(function (err, ports) {
-            if (err) {
-                throw new Error('Serialports could not be listed: ' + err);
-            }
-
-            debug.logAvailablePorts(ports);
-
-            for (var i = 0; i < ports.length; i++) {
-                availablePorts[i] = ports[i].comName;
-            }
-
-            _setupSerialConnection();
-        });
-    }
+    
+    _setupSerialConnection(options.serialPort);
 }
 
 util.inherits(P1Reader, EventEmitter);
-
-/**
- * Retrieve the name of the serial port being used
- */
-P1Reader.prototype.getSerialPort = function () {
-    return serialPortUsed;
-};
 
 module.exports = P1Reader;
 
 /**
  * Setup serial port connection
  */
-function _setupSerialConnection() {
-    var port = availablePorts[0];
-
+function _setupSerialConnection(port) {
     debug.log('Trying to connect to Smart Meter via port: ' + port);
 
     var received = '';

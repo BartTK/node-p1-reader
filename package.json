@@ -1,7 +1,7 @@
 {
   "name": "p1-reader",
-  "version": "1.4.1",
-  "description": "Node.js package for reading and parsing data from the P1 port of a Dutch Smart Meter",
+  "version": "2.0.4",
+  "description": "Node.js package for reading and parsing data from the P1 port of a Smart Meter",
   "main": "main.js",
   "author": "Ruud Verheijden",
   "license": "MIT",
@@ -14,6 +14,9 @@
     "line-reader": "^0.4.0"
   },
   "devDependencies": {
-    "jasmine": "^2.5.3"
+    "jasmine": "^3.5.0"
+  },
+  "scripts": {
+    "test": "jasmine"
   }
 }
